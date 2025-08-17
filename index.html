@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de QR Code para Pagamento</title>
+    <!-- Tailwind CSS para um design moderno e adaptável -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Biblioteca para gerar códigos QR -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+    <!-- Fonte amigável de Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilos para a animação do ícone de sucesso */
+        .icon-draw {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw 1s ease-in-out forwards;
+        }
+        @keyframes draw {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        /* Estilos para impressão: esconde tudo exceto o QR code */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-area, #printable-area * {
+                visibility: visible;
+            }
+            #printable-area {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Vista do Gerador de QR Code -->
+    <div id="generator-view" class="w-full max-w-md mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-600">Ponto de Venda QR</h1>
+            <p class="text-gray-600 mt-2">Gere um QR Code para a sua venda na feira!</p>
+        </header>
+        <main class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+            <div class="space-y-4">
+                <div>
+                    <label for="amount" class="block text-sm font-medium text-gray-700 mb-1">Preço do item (R$):</label>
+                    <input type="number" id="amount" placeholder="Ex: 10.50" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <button id="generate-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">
+                    Gerar Código QR
+                </button>
+                <div id="printable-area" class="mt-4 p-4 bg-gray-50 rounded-lg flex flex-col items-center justify-center min-h-[250px]">
+                    <div id="qr-code-container">
+                        <p class="text-gray-500 text-center">O código QR para impressão aparecerá aqui</p>
+                    </div>
+                </div>
+                 <button id="print-btn" class="w-full mt-2 bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105 hidden">
+                    Imprimir QR Code
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vista de Confirmação de Pagamento -->
+    <div id="confirmation-view" class="w-full max-w-md mx-auto text-center hidden">
+        <div class="bg-white rounded-2xl shadow-2xl p-8">
+            <svg class="w-24 h-24 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path class="icon-draw" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h3 class="text-3xl font-bold text-gray-800 mt-4">Pagamento Confirmado!</h3>
+            <p id="success-message" class="text-gray-600 text-2xl mt-2 font-semibold"></p>
+            <p class="mt-6 text-sm text-gray-500">Obrigado por participar da nossa feira!</p>
+        </div>
+    </div>
+
+    <script>
+        // Elementos do DOM
+        const generatorView = document.getElementById('generator-view');
+        const confirmationView = document.getElementById('confirmation-view');
+        const amountInput = document.getElementById('amount');
+        const generateBtn = document.getElementById('generate-btn');
+        const printBtn = document.getElementById('print-btn');
+        const qrCodeContainer = document.getElementById('qr-code-container');
+        const successMessage = document.getElementById('success-message');
+
+        // Função para verificar a URL e decidir qual tela mostrar
+        function handleRouting() {
+            const hash = window.location.hash;
+
+            if (hash.startsWith('#confirm')) {
+                // Se a URL contém #confirm, mostra a tela de confirmação
+                generatorView.classList.add('hidden');
+                confirmationView.classList.remove('hidden');
+
+                // Extrai o valor do parâmetro 'amount' da URL
+                const params = new URLSearchParams(hash.substring(hash.indexOf('?') + 1));
+                const amount = parseFloat(params.get('amount') || '0');
+                
+                // Formata o valor como moeda brasileira
+                const formattedAmount = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                
+                successMessage.textContent = `Valor: ${formattedAmount}`;
+
+                // Força o reinício da animação do ícone
+                const icon = confirmationView.querySelector('.icon-draw');
+                icon.style.animation = 'none';
+                icon.offsetHeight; // Truque para forçar o reflow
+                icon.style.animation = '';
+
+            } else {
+                // Caso contrário, mostra a tela do gerador
+                generatorView.classList.remove('hidden');
+                confirmationView.classList.add('hidden');
+            }
+        }
+
+        // Evento para o botão de gerar QR Code
+        generateBtn.addEventListener('click', () => {
+            const amount = parseFloat(amountInput.value);
+            if (isNaN(amount) || amount <= 0) {
+                // Use um modal customizado em vez de alert
+                alert('Por favor, insira um preço válido e maior que zero.');
+                return;
+            }
+
+            // Pega a URL base da página, removendo qualquer hash existente
+            const baseURL = window.location.href.split('#')[0];
+            // Constrói a URL de confirmação que será embutida no QR Code
+            const confirmationURL = `${baseURL}#confirm?amount=${amount}`;
+
+            // Gera o QR Code
+            const qr = qrcode(0, 'M'); // Nível de correção de erro médio
+            qr.addData(confirmationURL);
+            qr.make();
+            
+            // Mostra o QR Code na tela
+            qrCodeContainer.innerHTML = qr.createImgTag(8, 10); // (tamanho, margem)
+            qrCodeContainer.firstChild.classList.add('rounded-lg', 'mx-auto');
+
+            // Mostra o botão de imprimir
+            printBtn.classList.remove('hidden');
+        });
+
+        // Evento para o botão de imprimir
+        printBtn.addEventListener('click', () => {
+            window.print();
+        });
+
+        // Roda a função de roteamento quando a página carrega e quando o hash muda
+        window.addEventListener('load', handleRouting);
+        window.addEventListener('hashchange', handleRouting);
+
+    </script>
+</body>
+</html>
